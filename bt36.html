@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bài Tập 36 - Mini Game Hứng Táo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: #f1f5f9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #1e293b;
+    }
+
+    /* Bảng thông số phía trên */
+    .dashboard {
+      width: 500px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 0 4px;
+    }
+
+    .stat-box {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    #score {
+      color: #2563eb;
+    }
+
+    #lives {
+      color: #ef4444;
+    }
+
+    .btn-start {
+      padding: 8px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      background-color: #16a34a;
+      color: white;
+      border: none;
+      border-radius: 9999px;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: background 0.2s;
+    }
+
+    .btn-start:hover {
+      background-color: #15803d;
+    }
+
+    /* Khung game đúng kích thước đề bài */
+    #game-container {
+      width: 500px;
+      height: 400px;
+      background-color: #fefce8;
+      border: 3px solid #cbd5e1;
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Giỏ hứng ở đáy */
+    #basket {
+      width: 80px;
+      height: 25px;
+      background-color: #854d0e;
+      border-radius: 4px 4px 12px 12px;
+      position: absolute;
+      bottom: 10px;
+      left: 210px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Quả táo */
+    #apple {
+      width: 26px;
+      height: 26px;
+      background-color: #ef4444;
+      border-radius: 50%;
+      position: absolute;
+      top: -30px;
+      left: 237px;
+      box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.2);
+    }
+
+    #apple::before {
+      content: "";
+      position: absolute;
+      width: 4px;
+      height: 6px;
+      background-color: #15803d;
+      border-radius: 2px;
+      top: -4px;
+      left: 11px;
+    }
+
+    /* Modal kết thúc game */
+    .game-over-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(2px);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      z-index: 20;
+    }
+
+    .game-over-overlay.active {
+      display: flex;
+    }
+
+    .game-over-overlay h2 {
+      font-size: 2.2rem;
+      color: #f87171;
+      margin-bottom: 0.5rem;
+    }
+
+    .game-over-overlay p {
+      font-size: 1.1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .instructions {
+      margin-top: 14px;
+      font-size: 0.88rem;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard">
+    <div class="stat-box">Điểm: <span id="score">0</span></div>
+    <button id="start-btn" class="btn-start">Bắt đầu</button>
+    <div class="stat-box">Mạng: <span id="lives">3</span></div>
+  </div>
+
+  <div id="game-container">
+    <div id="basket"></div>
+    <div id="apple"></div>
+
+    <div id="game-over" class="game-over-overlay">
+      <h2>Game Over</h2>
+      <p>Tổng điểm của bạn: <span id="final-score">0</span></p>
+      <button id="restart-btn" class="btn-start">Chơi lại</button>
+    </div>
+  </div>
+
+  <p class="instructions">Dùng phím mũi tên <b>Trái (←)</b> và <b>Phải (→)</b> để điều khiển giỏ.</p>
+
+  <script>
+    const container = document.getElementById("game-container");
+    const basket = document.getElementById("basket");
+    const apple = document.getElementById("apple");
+    const scoreDisplay = document.getElementById("score");
+    const livesDisplay = document.getElementById("lives");
+    const finalScore = document.getElementById("final-score");
+    const gameOverOverlay = document.getElementById("game-over");
+    const startBtn = document.getElementById("start-btn");
+    const restartBtn = document.getElementById("restart-btn");
+
+    // Thông số cơ sở
+    const CONTAINER_WIDTH = 500;
+    const CONTAINER_HEIGHT = 400;
+    const BASKET_WIDTH = 80;
+    const BASKET_HEIGHT = 25;
+    const BASKET_BOTTOM = 10;
+    const APPLE_SIZE = 26;
+    const BASKET_SPEED = 7;
+
+    // Trạng thái trò chơi
+    let score = 0;
+    let lives = 3;
+    let isRunning = false;
+    let animationFrameId = null;
+
+    let basketX = (CONTAINER_WIDTH - BASKET_WIDTH) / 2;
+    let appleX = Math.floor(Math.random() * (CONTAINER_WIDTH - APPLE_SIZE));
+    let appleY = -APPLE_SIZE;
+    let fallSpeed = 3;
+
+    // Bắt phím điều khiển (hỗ trợ giữ phím mượt mà)
+    const keys = { ArrowLeft: false, ArrowRight: false };
+
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        keys[e.code] = true;
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        keys[e.code] = false;
+      }
+    });
+
+    function resetApple() {
+      appleY = -APPLE_SIZE;
+      appleX = Math.floor(Math.random() * (CONTAINER_WIDTH - APPLE_SIZE));
+      apple.style.left = appleX + "px";
+      apple.style.top = appleY + "px";
+    }
+
+    function checkCollision() {
+      const appleBottom = appleY + APPLE_SIZE;
+      const appleRight = appleX + APPLE_SIZE;
+      const basketTop = CONTAINER_HEIGHT - BASKET_BOTTOM - BASKET_HEIGHT;
+      const basketBottom = CONTAINER_HEIGHT - BASKET_BOTTOM;
+      const basketRight = basketX + BASKET_WIDTH;
+
+      // Kiểm tra giao cắt AABB giữa hộp quả táo và hộp giỏ
+      return (
+        appleBottom >= basketTop &&
+        appleY <= basketBottom &&
+        appleRight >= basketX &&
+        appleX <= basketRight
+      );
+    }
+
+    function gameLoop() {
+      if (!isRunning) return;
+
+      // 1. Cập nhật vị trí giỏ và khóa biên trong phạm vi khung
+      if (keys.ArrowLeft) {
+        basketX -= BASKET_SPEED;
+        if (basketX < 0) basketX = 0;
+      }
+      if (keys.ArrowRight) {
+        basketX += BASKET_SPEED;
+        if (basketX > CONTAINER_WIDTH - BASKET_WIDTH) {
+          basketX = CONTAINER_WIDTH - BASKET_WIDTH;
+        }
+      }
+      basket.style.left = basketX + "px";
+
+      // 2. Cập nhật vị trí quả táo rơi tự do
+      appleY += fallSpeed;
+      apple.style.top = appleY + "px";
+
+      // 3. Kiểm tra va chạm với giỏ
+      if (checkCollision()) {
+        score++;
+        scoreDisplay.textContent = score;
+        fallSpeed += 0.25; // Tăng nhẹ tốc độ rơi khi hứng trúng
+        resetApple();
+      } 
+      // 4. Nếu trượt chạm đáy khung
+      else if (appleY >= CONTAINER_HEIGHT) {
+        lives--;
+        livesDisplay.textContent = lives;
+        resetApple();
+
+        if (lives <= 0) {
+          endGame();
+          return;
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+      if (isRunning) return;
+      score = 0;
+      lives = 3;
+      fallSpeed = 3;
+      scoreDisplay.textContent = score;
+      livesDisplay.textContent = lives;
+      gameOverOverlay.classList.remove("active");
+      
+      basketX = (CONTAINER_WIDTH - BASKET_WIDTH) / 2;
+      basket.style.left = basketX + "px";
+      resetApple();
+
+      isRunning = true;
+      startBtn.disabled = true;
+      startBtn.style.opacity = "0.6";
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+      isRunning = false;
+      cancelAnimationFrame(animationFrameId);
+      finalScore.textContent = score;
+      gameOverOverlay.classList.add("active");
+      startBtn.disabled = false;
+      startBtn.style.opacity = "1";
+    }
+
+    startBtn.addEventListener("click", startGame);
+    restartBtn.addEventListener("click", startGame);
+  </script>
+</body>
+</html>
